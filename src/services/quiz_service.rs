@@ -27,54 +27,21 @@ impl QuizService {
 
 
     pub async fn get_categories_with_top_users(&self, user_service: &UserService) -> Result<Vec<CategoryWithTopUserResponse>, String> {
-        let pipeline = vec![
-            // 1. Group quizzes by category and user, summing scores
-            doc! { "$group": { "_id": { "category_id": "$category_id", "user_id": "$user_id" }, "total_score": { "$sum": "$score" } } },
-            // 2. Sort by score to find the top score for each category
-            doc! { "$sort": { "total_score": -1 } },
-            // 3. Group by category to get the top user and their score
-            doc! { "$group": { "_id": "$_id.category_id", "top_user_id": { "$first": "$_id.user_id" }, "top_score": { "$first": "$total_score" } } },
-            // 4. Join with the categories collection to get category details
-            doc! { "$lookup": { "from": "categories", "localField": "_id", "foreignField": "_id", "as": "category_info" } },
-            // 5. Unwind the category_info array
-            doc! { "$unwind": "$category_info" },
-            // 6. Join with the users collection to get top user details
-            doc! { "$lookup": { "from": "users", "localField": "top_user_id", "foreignField": "_id", "as": "top_user_info" } },
-            // 7. Project the final shape
-            doc! { "$project": {
-                "category": "$category_info",
-                "top_user": { "$arrayElemAt": ["$top_user_info", 0] }
-            } },
-        ];
-
-        let mut cursor = self.quiz_collection.aggregate(pipeline, ).await.map_err(|e| e.to_string())?;
+        let mut cursor = self.category_collection.find(doc! {}, ).await.map_err(|e| e.to_string())?;
         let mut results = Vec::new();
 
         while let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
-            let category_doc = doc.get_document("category").map_err(|_| "Category document missing".to_string())?;
-             let category: Category = bson::from_document(category_doc.clone()).map_err(|e| e.to_string())?;
-            let top_user: Option<User> = doc.get("top_user").and_then(|u| bson::from_bson(u.clone()).ok());
+            let top_user = if let Some(user_id) = doc.top_user_id {
+                user_service.get_user(user_id).await.ok()
+            } else {
+                None
+            };
 
             results.push(CategoryWithTopUserResponse {
-                category: CategoryResponse::from((category, None)),
+                category: CategoryResponse::from((doc, None)),
                 top_user: top_user.map(|u| u.into()),
             });
         }
-
-        // Now, get categories that have no quizzes taken yet
-        let categories_with_scores_ids: Vec<ObjectId> = results.iter().map(|r| ObjectId::parse_str(r.category.id.as_ref().unwrap()).unwrap()).collect();
-        let categories_without_scores_cursor = self.category_collection.find(doc! { "_id": { "$nin": categories_with_scores_ids } }, ).await.map_err(|e| e.to_string())?;
-        let categories_without_scores: Vec<Category> = categories_without_scores_cursor.try_collect().await.map_err(|e| e.to_string())?;
-
-        let without_scores_responses: Vec<CategoryWithTopUserResponse> = categories_without_scores
-            .into_iter()
-            .map(|c| CategoryWithTopUserResponse {
-                category: CategoryResponse::from((c, None)),
-                top_user: None,
-            })
-            .collect();
-
-        results.extend(without_scores_responses);
         Ok(results)
     }
 
@@ -83,25 +50,15 @@ impl QuizService {
         category_id: ObjectId,
         user_service: &UserService,
     ) -> Result<Option<UserResponse>, String> {
-        // Aggregate quizzes by user_id, sum scores, filter by category_id
-        let pipeline = vec![
-            doc! { "$match": { "category_id": category_id.clone() } },
-            doc! { "$group": { "_id": "$user_id", "total_score": { "$sum": "$score" } } },
-            doc! { "$sort": { "total_score": -1 } },
-            doc! { "$limit": 1 },
-        ];
-        let mut cursor = self.quiz_collection.aggregate(pipeline,)
+        let category = self.category_collection
+            .find_one(doc! { "_id": category_id }, )
             .await
-            .map_err(|_| "Failed to aggregate scores".to_string())?;
-
-        if let Some(doc) = cursor.try_next().await.map_err(|_| "Error iterating".to_string())? {
-            if let Ok(user_id) = doc.get_object_id("_id") {
-                let user = user_service.get_user(user_id).await?;
-                Ok(Some(user.into()))
-            } else {
-                // No user has taken a quiz in this category yet
-                Ok(None)
-            }
+            .map_err(|e| e.to_string())?
+            .ok_or("Category not found")?;
+        
+        if let Some(user_id) = category.top_user_id {
+            let user = user_service.get_user(user_id).await?;
+            Ok(Some(user.into()))
         } else {
             Ok(None)
         }
@@ -249,7 +206,58 @@ impl QuizService {
             .await?;
     }
 
+    // Check and update top user for the category
+    self.update_category_top_user(quiz.user_id, quiz.category_id, user_service).await?;
+
     Ok(quiz.score)
 }
 
+    async fn update_category_top_user(&self, user_id: ObjectId, category_id: ObjectId, user_service: &UserService) -> Result<(), String> {
+        // 1. Get the user's new total score for this category by summing up all their quiz scores in this category.
+        let user_score_pipeline = vec![
+            doc! { "$match": { "user_id": user_id, "category_id": category_id } },
+            doc! { "$group": { "_id": null, "total_score": { "$sum": "$score" } } },
+        ];
+        let mut cursor = self.quiz_collection.aggregate(user_score_pipeline, ).await.map_err(|e| e.to_string())?;
+        let user_total_score = if let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
+            doc.get_i32("total_score").unwrap_or(0)
+        } else {
+            0
+        };
+
+        // 2. Get the category to find the current top user.
+        let category = self.category_collection
+            .find_one(doc! { "_id": category_id }, )
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Category not found during top user update")?;
+
+        let current_top_score = if let Some(top_user_id) = category.top_user_id {
+            // If there is a top user, get their total score.
+            let top_user_score_pipeline = vec![
+                doc! { "$match": { "user_id": top_user_id, "category_id": category_id } },
+                doc! { "$group": { "_id": null, "total_score": { "$sum": "$score" } } },
+            ];
+            let mut cursor = self.quiz_collection.aggregate(top_user_score_pipeline, ).await.map_err(|e| e.to_string())?;
+            if let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
+                doc.get_i32("total_score").unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            // If there's no top user, the top score is 0.
+            0
+        };
+
+        // 3. If the new score is higher, update the category's top_user_id.
+        if user_total_score > current_top_score {
+            self.category_collection.update_one(
+                doc! { "_id": category_id },
+                doc! { "$set": { "top_user_id": user_id } },
+                
+            ).await.map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
 }

@@ -170,8 +170,6 @@ Ok((user_response, token))
     }
 
     pub async fn get_user(&self, user_id: ObjectId) -> Result<User, String> {
-        let user = self.collection.find_one(doc! { "_id": user_id }).await.map_err(|_| "Failed to fetch user".to_string())?;
-        user.ok_or("User not found".to_string())
         self.collection
             .find_one(doc! { "_id": user_id })
             .await

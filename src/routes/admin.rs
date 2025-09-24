@@ -122,7 +122,8 @@ pub async fn get_categories_with_top_users(
         name: name.ok_or((StatusCode::BAD_REQUEST, "Missing name".to_string()))?,
         tags,
         parent_id: parent_oid,
-        image_url: image_url.clone(), // <-- Save the URL to the DB model
+        image_url: image_url.clone(), 
+        top_user_id: None,
     };
 
     question_service

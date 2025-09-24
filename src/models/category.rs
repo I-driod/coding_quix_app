@@ -15,7 +15,8 @@ pub struct Category {
     pub name: String,
     pub tags: Vec<String>,
     pub parent_id: Option<ObjectId>,
-    pub image_url: Option<String>
+    pub image_url: Option<String>,
+    pub top_user_id: Option<ObjectId>,
 }
 
 
@@ -64,6 +65,7 @@ impl From<(Category, Option<String>)> for CategoryResponse {
             image_url: c.image_url,
             parent_id: c.parent_id.map(|oid| oid.to_hex()),
             tags: c.tags,
+            // top_user is handled separately in the service layer
        
         }
     }
@@ -77,6 +79,7 @@ impl From<CreateCategoryRequest> for Category {
             tags: req.tags,
             parent_id: req.parent_id.and_then(|id_str| ObjectId::parse_str(&id_str).ok()),
             image_url: None,
+            top_user_id: None,
         }
     }
 }
