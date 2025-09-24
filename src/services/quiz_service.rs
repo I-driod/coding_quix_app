@@ -232,29 +232,25 @@ impl QuizService {
             .map_err(|e| e.to_string())?
             .ok_or("Category not found during top user update")?;
 
-        let current_top_score = if let Some(top_user_id) = category.top_user_id {
-            // If there is a top user, get their total score.
-            let top_user_score_pipeline = vec![
-                doc! { "$match": { "user_id": top_user_id, "category_id": category_id } },
-                doc! { "$group": { "_id": null, "total_score": { "$sum": "$score" } } },
-            ];
-            let mut cursor = self.quiz_collection.aggregate(top_user_score_pipeline, ).await.map_err(|e| e.to_string())?;
-            if let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
-                doc.get_i32("total_score").unwrap_or(0)
-            } else {
-                0
-            }
+        // 2. Get the current top score for the category using an aggregation pipeline
+        let top_score_pipeline = vec![
+            doc! { "$match": { "category_id": category_id } },
+            doc! { "$group": { "_id": "$user_id", "total_score": { "$sum": "$score" } } },
+            doc! { "$sort": { "total_score": -1 } },
+            doc! { "$limit": 1 },
+        ];
+        let mut top_cursor = self.quiz_collection.aggregate(top_score_pipeline, ).await.map_err(|e| e.to_string())?;
+        let current_top_score = if let Some(doc) = top_cursor.try_next().await.map_err(|e| e.to_string())? {
+            doc.get_i32("total_score").unwrap_or(0)
         } else {
-            // If there's no top user, the top score is 0.
             0
         };
 
         // 3. If the new score is higher, update the category's top_user_id.
-        if user_total_score > current_top_score {
+        if user_total_score >= current_top_score {
             self.category_collection.update_one(
                 doc! { "_id": category_id },
                 doc! { "$set": { "top_user_id": user_id } },
-                
             ).await.map_err(|e| e.to_string())?;
         }
 
