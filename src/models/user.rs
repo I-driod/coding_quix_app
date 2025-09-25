@@ -1,10 +1,7 @@
 use bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use utoipa::ToSchema;
-
-
-
+use uuid::Uuid;
 
 #[derive(Serialize, ToSchema)]
 pub struct UserResponse {
@@ -30,10 +27,6 @@ impl From<User> for UserResponse {
         }
     }
 }
-
-
-
-
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct User {

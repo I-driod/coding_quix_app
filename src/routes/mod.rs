@@ -25,16 +25,17 @@ async fn health_check() -> &'static str {
 pub fn init_routes(db: Arc<Database>, config: Arc<config::Config>) -> Router {
     use crate::services::user_service::UserService;
   let twilio = Arc::new(TwilioClient::new_from_env());
+    let question_service = Arc::new(crate::services::question_service::QuestionService::new(db.clone()));
 
     let user_service = Arc::new(UserService::new(db.clone(), twilio));
     let quiz_service = Arc::new(crate::services::quiz_service::QuizService::new(db.clone()));
 
     Router::new()
         .route("/health", get(health_check))
-        .merge(auth::auth_routes(user_service.clone(), config))
-        .merge(user::user_routes(user_service.clone())) 
+        .merge(auth::auth_routes(user_service.clone(), config.clone()))
+        .merge(user::user_routes(user_service.clone()))
         .merge(admin::admin_routes(
-            Arc::new(crate::services::question_service::QuestionService::new(db.clone())),
+            question_service.clone(),
             quiz_service.clone(),
             user_service.clone()
         ))
