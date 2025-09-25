@@ -3,12 +3,11 @@ use std::{fs, sync::Arc};
 use axum::{extract::{Path, State}, http::{StatusCode, HeaderMap}, Json, Router};
 // use axum::extract::Multipart;
 use axum_extra::extract::Multipart;
-use base64::Engine;
 use bson::oid::ObjectId;
 use uuid::Uuid;
 use tower_http::services::ServeDir;
 
-use crate::{config, models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryRequest, CreateCategoryResponse, CategoryWithTopUserResponse}, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, user::UserResponse}, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService}, };
+use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, CategoryWithTopUserResponse}, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, user::UserResponse}, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService}, };
 
 
 
@@ -163,7 +162,7 @@ pub async fn create_question(
             question: QuestionResponse {
                 id: question.id.map(|oid| oid.to_hex()),
                 category_id: question.category_id.to_hex(),
-                text: question.text,
+                text: question.question,
                 question_type: question.question_type,
                 options: question.options,
                 correct_answer: question.correct_answer,

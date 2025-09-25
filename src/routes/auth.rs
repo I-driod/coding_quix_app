@@ -1,6 +1,6 @@
 use axum::{extract::State, http::StatusCode, Json, Router};
 use serde::Deserialize;
-use utoipa::{OpenApi, ToSchema};
+use utoipa::ToSchema;
 use crate::{config, services::user_service::{LoginResponse, UserService}};
 use std::sync::Arc;
 use crate::models::user::Role;

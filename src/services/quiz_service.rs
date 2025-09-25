@@ -6,7 +6,7 @@ use futures::TryStreamExt;
 use mongodb::{Collection, Database};
 use uuid::Uuid;
 
-use crate::{models::{category::{Category, CategoryResponse, CategoryWithTopUserResponse}, question::{Difficulty, Question}, quiz::Quiz, user::{User, UserResponse}}, services::user_service::UserService};
+use crate::{models::{category::{self, Category, CategoryResponse, CategoryWithTopUserResponse}, question::{Difficulty, Question}, quiz::Quiz, user::UserResponse}, services::{leaderboard_service::LeaderboardService, user_service::UserService}};
 
 
 
@@ -14,14 +14,16 @@ pub struct QuizService {
     quiz_collection: Collection<Quiz>,
     category_collection: Collection<Category>,
     question_collection: Collection<Question>,
+    pub leaderboard_service: Arc<LeaderboardService>
 }
 
 impl QuizService {
-    pub fn new(db: Arc<Database>) -> Self {
+    pub fn new(db: Arc<Database>, leaderboard_service:Arc<LeaderboardService>) -> Self {
         Self {
             quiz_collection: db.collection("quizzes"),
             category_collection: db.collection("categories"),
             question_collection: db.collection("questions"),
+            leaderboard_service
         }
     }
 
@@ -38,7 +40,7 @@ impl QuizService {
             };
 
             results.push(CategoryWithTopUserResponse {
-                category: CategoryResponse::from((doc, None)),
+                category: category::CategoryResponse::from((doc, None)),
                 top_user: top_user.map(|u| u.into()),
             });
         }
@@ -209,51 +211,40 @@ impl QuizService {
     // Check and update top user for the category
     self.update_category_top_user(quiz.user_id, quiz.category_id, user_service).await?;
 
+    // Update leaderboard
+    self.leaderboard_service.update_leaderboard(quiz.user_id, quiz.category_id, quiz.score).await?;
+
     Ok(quiz.score)
 }
 
-    async fn update_category_top_user(&self, user_id: ObjectId, category_id: ObjectId, user_service: &UserService) -> Result<(), String> {
-        // 1. Get the user's new total score for this category by summing up all their quiz scores in this category.
-        let user_score_pipeline = vec![
-            doc! { "$match": { "user_id": user_id, "category_id": category_id } },
-            doc! { "$group": { "_id": null, "total_score": { "$sum": "$score" } } },
-        ];
-        let mut cursor = self.quiz_collection.aggregate(user_score_pipeline, ).await.map_err(|e| e.to_string())?;
-        let user_total_score = if let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
-            doc.get_i32("total_score").unwrap_or(0)
-        } else {
-            0
-        };
+   async fn update_category_top_user(
+    &self,
+    _user_id: ObjectId,
+    category_id: ObjectId,
+    _user_service: &UserService,
+) -> Result<(), String> {
+    // 1. Fetch all finished quizzes for the category
+    let mut cursor = self.quiz_collection.find(
+        doc! { "category_id": category_id, "end_time": { "$exists": true } },
+    ).await.map_err(|e| e.to_string())?;
 
-        // 2. Get the category to find the current top user.
-        let category = self.category_collection
-            .find_one(doc! { "_id": category_id }, )
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or("Category not found during top user update")?;
-
-        // 2. Get the current top score for the category using an aggregation pipeline
-        let top_score_pipeline = vec![
-            doc! { "$match": { "category_id": category_id } },
-            doc! { "$group": { "_id": "$user_id", "total_score": { "$sum": "$score" } } },
-            doc! { "$sort": { "total_score": -1 } },
-            doc! { "$limit": 1 },
-        ];
-        let mut top_cursor = self.quiz_collection.aggregate(top_score_pipeline, ).await.map_err(|e| e.to_string())?;
-        let current_top_score = if let Some(doc) = top_cursor.try_next().await.map_err(|e| e.to_string())? {
-            doc.get_i32("total_score").unwrap_or(0)
-        } else {
-            0
-        };
-
-        // 3. If the new score is higher, update the category's top_user_id.
-        if user_total_score >= current_top_score {
-            self.category_collection.update_one(
-                doc! { "_id": category_id },
-                doc! { "$set": { "top_user_id": user_id } },
-            ).await.map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
+    // 2. Group scores by user
+    let mut user_scores: std::collections::HashMap<ObjectId, i32> = std::collections::HashMap::new();
+    while let Some(quiz) = cursor.try_next().await.map_err(|e| e.to_string())? {
+        *user_scores.entry(quiz.user_id).or_insert(0) += quiz.score;
     }
+
+    // 3. Find the top user
+    let top_user = user_scores.into_iter().max_by_key(|&(_, score)| score);
+
+    // 4. Update the category with the top user
+    if let Some((top_user_id, _)) = top_user {
+        self.category_collection.update_one(
+            doc! { "_id": category_id },
+            doc! { "$set": { "top_user_id": top_user_id } },
+        ).await.map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
 }

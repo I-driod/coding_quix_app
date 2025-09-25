@@ -33,8 +33,8 @@ mod middleware;
         routes::admin::top_user_for_category,
         routes::admin::get_categories_with_top_users,
         routes::quiz::submit_answer,
-        routes::quiz::finish_quiz
-     
+        routes::quiz::finish_quiz,
+        routes::quiz::get_leaderboard
 
     ),
     components(
@@ -54,6 +54,7 @@ mod middleware;
             models::category::CategoryWithTopUserResponse,
             models::question::CreateQuestionRequest,
             routes::quiz::SubmitAnswerRequest,
+            models::leaderboard::LeaderboardEntry,
 
             // routes::quiz::FiFn,
             
@@ -123,3 +124,6 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
      
 }
+
+#[cfg(test)]
+mod tests;

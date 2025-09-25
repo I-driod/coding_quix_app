@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Deserialize, Debug)]
 pub struct UserResponse {
     pub id: Option<String>,
     pub phone_number: String,
@@ -42,7 +42,7 @@ pub struct User {
 }
 
 
-#[derive(Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, ToSchema, Debug)]
 pub enum Role {
     User,
     Admin,

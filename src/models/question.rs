@@ -9,7 +9,7 @@ pub struct Question {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub category_id: ObjectId,
-    pub text: String,
+    pub question: String,
     pub question_type: QuestionType,
     pub options: Vec<String>,
     pub correct_answer: String,
@@ -71,7 +71,7 @@ impl From<Question> for QuestionResponse {
         QuestionResponse {
             id: q.id.map(|oid| oid.to_hex()),
             category_id: q.category_id.to_hex(),
-            text: q.text,
+            text: q.question,
             question_type: q.question_type,
             options: q.options,
             correct_answer: q.correct_answer,
@@ -93,7 +93,7 @@ impl TryFrom<CreateQuestionRequest> for Question {
         Ok(Question {
             id: None,
             category_id: category_oid,
-            text: req.text,
+            question: req.text,
             question_type: req.question_type,
             options: req.options,
             correct_answer: req.correct_answer,

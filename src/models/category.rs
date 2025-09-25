@@ -8,7 +8,7 @@ use base64::Engine;
 use super::user::UserResponse;
 
 /// DB model (keep as-is, used for MongoDB)
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Category {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
@@ -30,7 +30,7 @@ pub struct CreateCategoryRequest {
 }
 
 /// Response DTO (what the API returns)
-#[derive(Serialize, ToSchema, Clone)]
+#[derive(Serialize, ToSchema, Clone, Deserialize,)]
 pub struct CategoryResponse {
     pub id: Option<String>,
     pub name: String,
@@ -43,7 +43,7 @@ pub struct CategoryResponse {
 }
 
 /// Response DTO for a category with its top scoring user
-#[derive(Serialize, ToSchema, )]
+#[derive(Serialize, ToSchema, Deserialize)]
 pub struct CategoryWithTopUserResponse {
     #[serde(flatten)]
     pub category: CategoryResponse,

@@ -4,14 +4,13 @@ use axum::{
 use bson::oid::ObjectId;
 use serde::Deserialize;
 use std::sync::Arc;
-use utoipa::{OpenApi, ToSchema};
-use uuid::Uuid;
+use utoipa::ToSchema;
 
-use crate::{middleware::auth::auth_middleware, models::user::UserResponse, utils::Claims};
+use crate::{middleware::auth::auth_middleware, utils::Claims};
 use crate::models::question::Difficulty;
 use crate::models::quiz::Quiz;
-use crate::services::quiz_service::QuizService;
-use crate::services::user_service::UserService;
+use crate::services::{quiz_service::QuizService, user_service::UserService, leaderboard_service::LeaderboardService};
+use crate::models::leaderboard::LeaderboardEntry;
 
 #[derive(Deserialize, ToSchema)]
 pub struct StartQuizRequest {
@@ -27,6 +26,31 @@ pub struct SubmitAnswerRequest {
     time_taken: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/quiz/leaderboard/{category_id}",
+    params(
+        ("category_id" = String, Path, description = "Category ID")
+    ),
+    responses(
+        (status = 200, description = "Leaderboard retrieved successfully", body = [LeaderboardEntry]),
+        (status = 400, description = "Invalid category ID"),
+    )
+)]
+pub async fn get_leaderboard(
+    State((quiz_service, _user_service)): State<(Arc<QuizService>, Arc<UserService>)>,
+    Path(category_id): Path<String>,
+) -> Result<Json<Vec<crate::models::leaderboard::LeaderboardEntry>>, (StatusCode, String)> {
+    let category_id = ObjectId::parse_str(&category_id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid category ID".to_string()))?;
+
+    let leaderboard = quiz_service.leaderboard_service
+        .get_leaderboard(category_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    Ok(Json(leaderboard))
+}
 
 #[utoipa::path(
     post,
@@ -105,6 +129,7 @@ pub async fn submit_answer(
 )]
 pub async fn finish_quiz(
     State((quiz_service, user_service)): State<(Arc<QuizService>, Arc<UserService>)>,
+    Extension(_claims): Extension<Arc<Claims>>,
     Path(id): Path<String>,
 ) -> Result<(StatusCode, Json<i32>), (StatusCode, String)> {
     let quiz_id = ObjectId::parse_str(&id)
@@ -123,6 +148,7 @@ pub fn quiz_routes(quiz_service: Arc<QuizService>, user_service: Arc<UserService
         .route("/quiz/start", axum::routing::post(start_quiz))
         .route("/quiz/{id}/answer", axum::routing::post(submit_answer))
         .route("/quiz/{id}/finish", axum::routing::post(finish_quiz))
+        .route("/quiz/leaderboard/:category_id", axum::routing::get(get_leaderboard))
 
     .layer(axum::middleware::from_fn(auth_middleware))
         .with_state((quiz_service, user_service))

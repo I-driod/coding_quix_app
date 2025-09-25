@@ -10,10 +10,10 @@ use crate::services::phone_verify::TwilioClient;
 use crate::utils::{hash_password, verify_password, generate_jwt};
 use std::sync::Arc;
 use std::fmt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Deserialize)]
 pub struct LoginResponse {
     pub message: String,
     pub token: Option<String>,

@@ -1,8 +1,8 @@
 use axum::{extract::{Path, State}, http::StatusCode, middleware, Json, Router};
 use bson::oid::ObjectId;
 use serde::Deserialize;
-use utoipa::{ToSchema, IntoParams};
-use crate::models::user::{Profile, User, UserResponse};
+use utoipa::ToSchema;
+use crate::models::user::{Profile, UserResponse};
 use crate::services::user_service::UserService;
 use crate::middleware::auth::auth_middleware;
 use std::sync::Arc;

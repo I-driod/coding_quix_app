@@ -4,7 +4,7 @@ use axum::{Router, routing::get};
 use std::sync::Arc;
 use mongodb::Database;
 
-use crate::{config, services::phone_verify::TwilioClient};
+use crate::{config, services::{phone_verify::TwilioClient, leaderboard_service::LeaderboardService}};
 
 pub mod auth;
 pub mod user;
@@ -26,9 +26,10 @@ pub fn init_routes(db: Arc<Database>, config: Arc<config::Config>) -> Router {
     use crate::services::user_service::UserService;
   let twilio = Arc::new(TwilioClient::new_from_env());
     let question_service = Arc::new(crate::services::question_service::QuestionService::new(db.clone()));
+    let leaderboard_service = Arc::new(LeaderboardService::new(db.clone()));
 
     let user_service = Arc::new(UserService::new(db.clone(), twilio));
-    let quiz_service = Arc::new(crate::services::quiz_service::QuizService::new(db.clone()));
+    let quiz_service = Arc::new(crate::services::quiz_service::QuizService::new(db.clone(), leaderboard_service.clone()));
 
     Router::new()
         .route("/health", get(health_check))
