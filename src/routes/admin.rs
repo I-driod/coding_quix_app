@@ -7,49 +7,11 @@ use bson::oid::ObjectId;
 use uuid::Uuid;
 use tower_http::services::ServeDir;
 
-use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, CategoryWithTopUserResponse}, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, user::UserResponse}, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService}, };
+use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, }, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, }, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService}, };
 
 
 
-     #[utoipa::path(
-    get,
-    path = "/admin/categories/{id}/top_user",
-    params(
-        ("id" = String, Path, description = "Category ID")
-    ),
-    responses(
-        (status = 200, description = "Top user for category", body = UserResponse)
-    ),
-    security(("bearer_auth" = []))
-)]
-pub async fn top_user_for_category(
-    State((quiz_service, user_service, _question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
-    Path(id): Path<String>,
-) -> Result<Json<UserResponse>, (StatusCode, String)> {
-    let category_id = ObjectId::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid category ID".to_string()))?;
-    match quiz_service.top_user_for_category(category_id, &user_service).await {
-        Ok(Some(user)) => Ok(Json(user)),
-        Ok(None) => Err((StatusCode::NOT_FOUND, "No user found".to_string())),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
-    }
-}
 
-#[utoipa::path(
-    get,
-    path = "/admin/categories_with_top_users",
-    responses(
-        (status = 200, description = "List of categories with top users", body = [CategoryWithTopUserResponse])
-    ),
-    security(("bearer_auth" = []))
-)]
-pub async fn get_categories_with_top_users(
-    State((quiz_service, user_service, _question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
-) -> Result<Json<Vec<CategoryWithTopUserResponse>>, (StatusCode, String)> {
-    match quiz_service.get_categories_with_top_users(&user_service).await {
-        Ok(categories) => Ok(Json(categories)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
-    }
-}
 
 
 
@@ -316,7 +278,5 @@ pub fn admin_routes(
         .route("/admin/questions", axum::routing::post(create_question).get(list_questions))
         .route("/admin/questions/{id}", axum::routing::get(get_question).delete(delete_question))
         .nest_service("/uploads", ServeDir::new("uploads"))
-        .route("/admin/categories/{id}/top_user", axum::routing::get(top_user_for_category))
-        .route("/admin/categories_with_top_users", axum::routing::get(get_categories_with_top_users))
         .with_state(state)
 }

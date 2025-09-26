@@ -82,11 +82,7 @@ pub struct QuizResponse {
     pub paused: bool,
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct StartQuizResponse {
-    pub message: String,
-    pub quiz: QuizResponse,
-}
+
 
 // ----- Conversions from DB models to DTOs -----
 impl From<UserAnswer> for UserAnswerResponse {

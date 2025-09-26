@@ -6,7 +6,7 @@ use futures::TryStreamExt;
 use mongodb::{Collection, Database};
 use uuid::Uuid;
 
-use crate::{models::{category::{self, Category,  CategoryWithTopUserResponse}, question::{Difficulty, Question}, quiz::Quiz, user::UserResponse}, services::{leaderboard_service::LeaderboardService, user_service::UserService}};
+use crate::{models::{category::{ Category,  }, question::{Difficulty, Question}, quiz::Quiz, }, services::{leaderboard_service::LeaderboardService, user_service::UserService}};
 
 
 
@@ -28,43 +28,7 @@ impl QuizService {
     }
 
 
-    pub async fn get_categories_with_top_users(&self, user_service: &UserService) -> Result<Vec<CategoryWithTopUserResponse>, String> {
-        let mut cursor = self.category_collection.find(doc! {}, ).await.map_err(|e| e.to_string())?;
-        let mut results = Vec::new();
 
-        while let Some(doc) = cursor.try_next().await.map_err(|e| e.to_string())? {
-            let top_user = if let Some(user_id) = doc.top_user_id {
-                user_service.get_user(user_id).await.ok()
-            } else {
-                None
-            };
-
-            results.push(CategoryWithTopUserResponse {
-                category: category::CategoryResponse::from((doc, None)),
-                top_user: top_user.map(|u| u.into()),
-            });
-        }
-        Ok(results)
-    }
-
-       pub async fn top_user_for_category(
-        &self,
-        category_id: ObjectId,
-        user_service: &UserService,
-    ) -> Result<Option<UserResponse>, String> {
-        let category = self.category_collection
-            .find_one(doc! { "_id": category_id }, )
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or("Category not found")?;
-        
-        if let Some(user_id) = category.top_user_id {
-            let user = user_service.get_user(user_id).await?;
-            Ok(Some(user.into()))
-        } else {
-            Ok(None)
-        }
-    }
 
 
     pub async fn start_quiz(

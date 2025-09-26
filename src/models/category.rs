@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 
 
-use super::user::UserResponse;
+
 
 /// DB model (keep as-is, used for MongoDB)
 #[derive(Serialize, Deserialize, Clone, Debug,)]
@@ -41,13 +41,7 @@ pub struct CategoryResponse {
 
 }
 
-/// Response DTO for a category with its top scoring user
-#[derive(Serialize, ToSchema, Deserialize)]
-pub struct CategoryWithTopUserResponse {
-    #[serde(flatten)]
-    pub category: CategoryResponse,
-    pub top_user: Option<UserResponse>,
-}
+
 
 /// Response wrapper for create category
 #[derive(Serialize, ToSchema, Deserialize)]

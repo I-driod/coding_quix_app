@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-use crate::{middleware::auth::auth_middleware, utils::Claims};
+use crate::{middleware::auth::auth_middleware, models::quiz::QuizResponse, utils::Claims};
 use crate::models::question::Difficulty;
 use crate::models::quiz::Quiz;
 use crate::services::{quiz_service::QuizService, user_service::UserService, };
@@ -62,7 +62,7 @@ pub async fn get_leaderboard(
     path = "/quiz/start",
     request_body = StartQuizRequest,
     responses(
-        (status = 201, description = "Quiz started successfully", body = StartQuizRequest),
+        (status = 201, description = "Quiz started successfully", body = QuizResponse),
         (status = 400, description = "Invalid request or not enough questions"),
         (status = 401, description = "Unauthorized")
     ),
@@ -72,7 +72,7 @@ pub async fn start_quiz(
     State((quiz_service, _user_service)): State<(Arc<QuizService>, Arc<UserService>)>,
     Extension(claims): Extension<Arc<Claims>>,    // 👈 this brings `claims` into scope
     Json(req): Json<StartQuizRequest>,
-) -> Result<(StatusCode, Json<Quiz>), (StatusCode, String)> {
+) -> Result<(StatusCode, Json<QuizResponse>), (StatusCode, String)> {
     let user_id = ObjectId::parse_str(&claims.sub)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid user ID".to_string()))?;
 
@@ -84,7 +84,7 @@ pub async fn start_quiz(
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
-    Ok((StatusCode::CREATED, Json(quiz)))
+    Ok((StatusCode::CREATED, Json(quiz.into())))
 }
 
 #[utoipa::path(
@@ -156,7 +156,7 @@ pub async fn finish_quiz(
     ),
     request_body = PauseQuizRequest,
     responses(
-        (status = 200, description = "Quiz paused/resumed successfully", body = Quiz),
+        (status = 200, description = "Quiz paused/resumed successfully", body = QuizResponse),
         (status = 400, description = "Invalid request or quiz not found"),
         (status = 401, description = "Unauthorized")
     ),
@@ -166,7 +166,7 @@ pub async fn pause_quiz(
     State((quiz_service, _user_service)): State<(Arc<QuizService>, Arc<UserService>)>,
     Path(id): Path<String>,
     Json(req): Json<PauseQuizRequest>,
-) -> Result<(StatusCode, Json<Quiz>), (StatusCode, String)> {
+) -> Result<(StatusCode, Json<QuizResponse>), (StatusCode, String)> {
     let quiz_id = ObjectId::parse_str(&id)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid quiz ID".to_string()))?;
 
@@ -175,7 +175,7 @@ pub async fn pause_quiz(
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
-    Ok((StatusCode::OK, Json(quiz)))
+    Ok((StatusCode::OK, Json(quiz.into())))
 }
 
 pub fn quiz_routes(quiz_service: Arc<QuizService>, user_service: Arc<UserService>) -> Router {
