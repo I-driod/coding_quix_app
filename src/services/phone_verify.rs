@@ -16,17 +16,38 @@ pub struct TwilioClient{
 }
 
 
+// impl TwilioClient {
+//     pub fn new_from_env() -> Self {
+//         let account_sid = env::var("TWILIO_ACCOUNT_SID")
+//             .expect("TWILIO_ACCOUNT_SID must be set");
+//         let auth_token = env::var("TWILIO_AUTH_TOKEN")
+//             .expect("TWILIO_AUTH_TOKEN must be set");
+//         let service_sid = env::var("TWILIO_VERIFY_SERVICE_SID")
+//             .expect("TWILIO_VERIFY_SERVICE_SID must be set");
+
+//         Self {
+//             client: Client::new(),
+//             account_sid,
+//             auth_token,
+//             service_sid,
+//         }
+//     }
+
 impl TwilioClient {
-    pub fn new_from_env() -> Self {
-        let account_sid = env::var("TWILIO_ACCOUNT_SID")
+    /// Create a TwilioClient from Shuttle secrets
+    pub fn new_from_secrets(secrets: &shuttle_runtime::SecretStore) -> Self {
+        let account_sid = secrets
+            .get("TWILIO_ACCOUNT_SID")
             .expect("TWILIO_ACCOUNT_SID must be set");
-        let auth_token = env::var("TWILIO_AUTH_TOKEN")
+        let auth_token = secrets
+            .get("TWILIO_AUTH_TOKEN")
             .expect("TWILIO_AUTH_TOKEN must be set");
-        let service_sid = env::var("TWILIO_VERIFY_SERVICE_SID")
+        let service_sid = secrets
+            .get("TWILIO_VERIFY_SERVICE_SID")
             .expect("TWILIO_VERIFY_SERVICE_SID must be set");
 
         Self {
-            client: Client::new(),
+            client: reqwest::Client::new(),
             account_sid,
             auth_token,
             service_sid,
@@ -61,42 +82,6 @@ impl TwilioClient {
     }
 
  
-
-    /// Verify the code using Twilio Verify VerificationCheck.
-    // pub async fn check_verification(&self, phone_e164: &str, code: &str) -> Result<bool, String> {
-    //     let url = format!(
-    //         "https://verify.twilio.com/v2/Services/{}/VerificationCheck",
-    //         self.service_sid
-    //     );
-        
-
-    //     let res = self.client
-    //         .post(&url)
-    //         .basic_auth(&self.account_sid, Some(&self.auth_token))
-    //         .form(&[("To", phone_e164), ("Code", code)])
-    //         .send()
-    //         .await
-    //         .map_err(|e| format!("Twilio check request failed: {}", e))?;
-
-    //     let status = res.status();
-    //     let body = res.text().await.unwrap_or_else(|_| "<no body>".into());
-
-    //     if !status.is_success() {
-    //         return Err(format!("Twilio check error {}: {}", status, body));
-    //     }
-
-    //     // Twilio returns "status" (approved) and "valid" boolean
-    //     let v: Value = serde_json::from_str(&body)
-    //         .map_err(|e| format!("parse json error: {}", e))?;
-
-    //     if v.get("status").and_then(|s| s.as_str()) == Some("approved") {
-    //         return Ok(true);
-    //     }
-    //     if v.get("valid").and_then(|b| b.as_bool()) == Some(true) {
-    //         return Ok(true);
-    //     }
-    //     Ok(false)
-    // }
 
     pub async fn check_verification(&self, phone_e164: &str, code: &str) -> Result<bool, String> {
     println!("Checking SID={} To={} Code={}", self.service_sid, phone_e164, code);

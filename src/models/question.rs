@@ -1,7 +1,8 @@
-use bson::oid::ObjectId;
-use chrono::Duration;
+use chrono::{Duration};
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
 
 /// DB model (internal, used for Mongo)
 #[derive(Serialize, Deserialize, Clone)]
@@ -134,4 +135,3 @@ mod duration_as_secs {
         Ok(Duration::seconds(secs))
     }
 }
-

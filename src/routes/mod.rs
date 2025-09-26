@@ -22,14 +22,28 @@ async fn health_check() -> &'static str {
     "OK"
 }
 
-pub fn init_routes(db: Arc<Database>, config: Arc<config::Config>) -> Router {
+pub fn init_routes(
+    db: Arc<Database>,
+    config: Arc<config::Config>,
+    s3_service: Arc<crate::services::s3_service::S3Service>,
+     twilio: Arc<TwilioClient>,
+) -> Router {
     use crate::services::user_service::UserService;
-  let twilio = Arc::new(TwilioClient::new_from_env());
-    let question_service = Arc::new(crate::services::question_service::QuestionService::new(db.clone()));
+
+   
+
+   
+
+
+    let question_service =
+        Arc::new(crate::services::question_service::QuestionService::new(db.clone()));
     let leaderboard_service = Arc::new(LeaderboardService::new(db.clone()));
 
     let user_service = Arc::new(UserService::new(db.clone(), twilio));
-    let quiz_service = Arc::new(crate::services::quiz_service::QuizService::new(db.clone(), leaderboard_service.clone()));
+    let quiz_service = Arc::new(crate::services::quiz_service::QuizService::new(
+        db.clone(),
+        leaderboard_service.clone(),
+    ));
 
     Router::new()
         .route("/health", get(health_check))
@@ -38,7 +52,9 @@ pub fn init_routes(db: Arc<Database>, config: Arc<config::Config>) -> Router {
         .merge(admin::admin_routes(
             question_service.clone(),
             quiz_service.clone(),
-            user_service.clone()
+            user_service.clone(),
+            s3_service.clone(),
         ))
         .merge(quiz::quiz_routes(quiz_service, user_service.clone()))
 }
+

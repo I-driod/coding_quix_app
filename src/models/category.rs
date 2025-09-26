@@ -1,4 +1,4 @@
-use bson::oid::ObjectId;
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -29,7 +29,7 @@ pub struct CreateCategoryRequest {
 }
 
 /// Response DTO (what the API returns)
-#[derive(Serialize, ToSchema, Clone, Deserialize,)]
+#[derive(Serialize, ToSchema, Clone, Deserialize, Debug)]
 pub struct CategoryResponse {
     pub id: Option<String>,
     pub name: String,
@@ -89,9 +89,9 @@ impl From<CreateCategoryRequest> for Category {
 
 #[derive(ToSchema)]
 pub struct CreateCategoryMultipart {
-    pub _name: String,
-    pub _tags: Vec<String>,
-    pub _parent_id: Option<String>,
+    pub name: String,
+    pub tags: Vec<String>,
+    pub parent_id: Option<String>,
     #[schema(value_type = String, format = "binary")]
-    pub _image: Option<Vec<u8>>,
+    pub image: Option<Vec<u8>>,
 }

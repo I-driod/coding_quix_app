@@ -1,5 +1,5 @@
-use bson::oid::ObjectId;
 use chrono::Duration;
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

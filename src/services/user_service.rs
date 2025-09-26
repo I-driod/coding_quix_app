@@ -1,7 +1,8 @@
 
-use bson::oid::ObjectId;
+
 use mongodb::{Collection, Database};
-use bson::doc;
+use mongodb::bson::doc;
+use mongodb::bson::oid::ObjectId;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -159,7 +160,7 @@ Ok((user_response, token))
     pub async fn update_profile(&self, user_id: ObjectId, profile: Profile) -> Result<(), String> {
         let update_result = self.collection.update_one(
             doc! { "_id": user_id },
-            doc! { "$set": { "profile": bson::to_bson(&profile).unwrap() } }
+            doc! { "$set": { "profile": mongodb::bson::to_bson(&profile).unwrap() } }
         ).await.map_err(|_| "Failed to update profile".to_string())?;
 
         if update_result.matched_count == 0 {
@@ -192,7 +193,7 @@ Ok((user_response, token))
 
     pub async fn add_quiz_history(&self, user_id: ObjectId, quiz_uuid: Uuid) -> Result<(), String> {
         // Serialize the Uuid to its binary representation for MongoDB
-        let quiz_uuid_bson = bson::to_bson(&quiz_uuid).map_err(|_| "Failed to serialize quiz Uuid".to_string())?;
+        let quiz_uuid_bson = mongodb::bson::to_bson(&quiz_uuid).map_err(|_| "Failed to serialize quiz Uuid".to_string())?;
 
         let update_result = self.collection.update_one(
             doc! { "_id": user_id },

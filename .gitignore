@@ -1,5 +1,6 @@
 /target
 .env
+Secrets.toml
 **/*.rs.bk
 Cargo.lock
 .DS_Store
@@ -11,3 +12,5 @@ node_modules/
 *.swo
 *.tmp
 /tests/output/
+.shuttle*
+Secrets*.toml

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bson::{doc, oid::ObjectId};
+use mongodb::bson::{doc, oid::ObjectId};
 use chrono::Utc;
 use futures::TryStreamExt;
 use mongodb::{Collection, Database};
@@ -54,7 +54,7 @@ impl QuizService {
 
         let mut questions = Vec::new();
         while let Some(doc) = cursor.try_next().await.map_err(|_| "Error iterating questions".to_string())? {
-            let q: Question = bson::from_document(doc).map_err(|_| "Failed to parse question".to_string())?;
+            let q: Question = mongodb::bson::from_document(doc).map_err(|_| "Failed to parse question".to_string())?;
             questions.push(q);
         }
 
@@ -128,7 +128,7 @@ impl QuizService {
             correct,
         });
 
-        let anser_bson = bson::to_bson(&quiz.answers).map_err(|_| "Failed to serialize answers".to_string())?;
+        let anser_bson = mongodb::bson::to_bson(&quiz.answers).map_err(|_| "Failed to serialize answers".to_string())?;
 
         self.quiz_collection.update_one(
             doc! { "_id": &quiz_id },
@@ -154,7 +154,7 @@ impl QuizService {
     quiz_id: ObjectId
 ) -> Result<i32, String> {
 
-    let time_bson = bson::to_bson(&Utc::now()).map_err(|_| "Failed to serialize end_time".to_string())?;
+    let time_bson = mongodb::bson::to_bson(&Utc::now()).map_err(|_| "Failed to serialize end_time".to_string())?;
     let update = doc! { "$set": { "end_time": time_bson, "paused": false } };
 
     self.quiz_collection

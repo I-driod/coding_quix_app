@@ -1,19 +1,14 @@
-use std::{fs, sync::Arc};
+use std::{ sync::Arc};
 
 use axum::{extract::{Path, State}, http::{StatusCode, HeaderMap}, Json, Router};
 // use axum::extract::Multipart;
 use axum_extra::extract::Multipart;
-use bson::oid::ObjectId;
+
+use mongodb::bson::oid::ObjectId;
 use uuid::Uuid;
 use tower_http::services::ServeDir;
 
-use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, }, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, }, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService}, };
-
-
-
-
-
-
+use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, }, question::{CreateQuestionRequest, CreateQuestionResponse, Question, QuestionResponse}, }, services::{question_service::QuestionService, quiz_service::QuizService, user_service::UserService, s3_service::S3Service}, };
 
 #[utoipa::path(
     post,
@@ -26,12 +21,10 @@ use crate::{models::{category::{Category, CategoryResponse, CreateCategoryMultip
         (status = 201, description = "Category created", body = CreateCategoryResponse),
         (status = 400, description = "Bad request", body = String)
     ),
-    security(
-        ("bearer_auth" = [])
-    )
+    security(("bearer_auth" = []))
 )]
 pub async fn create_category(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<CreateCategoryResponse>), (StatusCode, String)> {
@@ -40,34 +33,40 @@ pub async fn create_category(
     let mut parent_id = None;
     let mut image_url = None;
 
-    let base_url = match std::env::var("BASE_URL") {
-        Ok(val) => val,
-        Err(_) => {
-            let host = headers
-                .get("host")
-                .and_then(|h| h.to_str().ok())
-                .unwrap_or("localhost:3000"); // Fallback
-            let scheme = if host.starts_with("localhost") { "http" } else { "https" };
-            format!("{}://{}", scheme, host)
-        }
-    };
-
     while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))? {
-        let field_name = field.name().unwrap().to_string();
+        let field_name = field.name().map(ToOwned::to_owned).unwrap_or_default();
         match field_name.as_str() {
-            "name" => name = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?),
-            "tags" => tags = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?),
+            "name" => name = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?.to_string()),
+            "tags" => tags = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?.to_string()),
             "parent_id" => parent_id = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?),
-            "image" => {
-                let bytes = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?.to_vec();
-                // Save image to disk
-                let filename = format!("{}.png", Uuid::new_v4());
-                let upload_dir = "uploads";
-                let filepath = format!("{}/{}", upload_dir, filename);
-                fs::create_dir_all(upload_dir).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create upload dir: {}", e)))?;
-                fs::write(&filepath, &bytes).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save image: {}", e)))?;
-                image_url = Some(format!("{}/uploads/{}", base_url, filename));
-            },
+           "image" => {
+    let content_type = field
+        .content_type()
+        .map(|ct| ct.to_string())
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+
+    // now consume field
+    let bytes = field
+        .bytes()
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?
+        .to_vec();
+
+    let filename = format!("{}.png", Uuid::new_v4());
+
+    image_url = Some(
+        s3_service
+            .upload_image(&filename, bytes, &content_type)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to upload image: {}", e),
+                )
+            })?,
+    );
+}
+,
             _ => {}
         }
     }
@@ -126,7 +125,7 @@ let category = Category {
     security(("bearer_auth" = []))
 )]
 pub async fn get_category(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     Path(id): Path<String>,
 ) -> Result<Json<Category>, (StatusCode, String)> {
     let category_id = ObjectId::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid category ID".to_string()))?;
@@ -142,7 +141,7 @@ pub async fn get_category(
     security(("bearer_auth" = []))
 )]
 pub async fn list_categories(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
 ) -> Result<Json<Vec<Category>>, (StatusCode, String)> {
     question_service.list_categories().await.map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
@@ -160,7 +159,7 @@ pub async fn list_categories(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_category(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let category_id = ObjectId::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid category ID".to_string()))?;
@@ -177,26 +176,15 @@ pub async fn delete_category(
     security(("bearer_auth" = []))
 )]
 pub async fn create_question(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>, 
-    Json(question): Json<Question>
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
+    Json(req): Json<CreateQuestionRequest>,
 ) -> Result<(StatusCode, Json<CreateQuestionResponse>), (StatusCode, String)> {
-    question_service.create_question(question.clone()).await.map(|_| {
+    let question: Question = req.try_into().map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    question_service.create_question(question.clone()).await.map(|_|
         (StatusCode::CREATED, Json(CreateQuestionResponse {
             message: "Question created successfully".to_string(),
-            question: QuestionResponse {
-                id: question.id.map(|oid| oid.to_hex()),
-                category_id: question.category_id.to_hex(),
-                text: question.question,
-                question_type: question.question_type,
-                options: question.options,
-                correct_answer: question.correct_answer,
-                explanation: question.explanation,
-                difficulty: question.difficulty,
-                timer_secs: question.timer.num_seconds(),
-                tags: question.tags,
-            }
-        }))
-    })
+            question: question.into(),
+        })))
     .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }
 
@@ -213,11 +201,11 @@ pub async fn create_question(
     security(("bearer_auth" = []))
 )]
 pub async fn get_question(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     Path(id): Path<String>,
-) -> Result<Json<Question>, (StatusCode, String)> {
+) -> Result<Json<QuestionResponse>, (StatusCode, String)> {
     let question_id = ObjectId::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid question ID".to_string()))?;
-    question_service.get_question(question_id).await.map(Json).map_err(|e| (StatusCode::NOT_FOUND, e))
+    question_service.get_question(question_id).await.map(|q| Json(q.into())).map_err(|e| (StatusCode::NOT_FOUND, e))
 }
 
 #[utoipa::path(
@@ -232,11 +220,11 @@ pub async fn get_question(
     security(("bearer_auth" = []))
 )]
 pub async fn list_questions(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> Result<Json<Vec<Question>>, (StatusCode, String)> {
+) -> Result<Json<Vec<QuestionResponse>>, (StatusCode, String)> {
     let category_id = params.get("category_id").and_then(|id| ObjectId::parse_str(id).ok());
-    question_service.list_questions(category_id).await.map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+    question_service.list_questions(category_id).await.map(|qs| Json(qs.into_iter().map(|q| q.into()).collect())).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
 
 #[utoipa::path(
@@ -252,22 +240,20 @@ pub async fn list_questions(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_question(
-    State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+    State((_quiz_service, _user_service, question_service, _s3_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>, Arc<S3Service>)>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let question_id = ObjectId::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid question ID".to_string()))?;
     question_service.delete_question(question_id).await.map(|_| StatusCode::NO_CONTENT).map_err(|e| (StatusCode::NOT_FOUND, e))
 }
 
-
-
-
 pub fn admin_routes(
     question_service: Arc<QuestionService>,
     quiz_service: Arc<QuizService>,
     user_service: Arc<UserService>,
+    s3_service: Arc<S3Service>,
 ) -> Router {
-    let state = (quiz_service, user_service, question_service.clone());
+    let state = (quiz_service, user_service, question_service.clone(), s3_service);
 
     Router::new()
         .route(

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use mongodb::{Collection, Database};
-use bson::{doc, oid::ObjectId};
+use mongodb::bson::{doc, oid::ObjectId};
 use futures::stream::TryStreamExt;
 use crate::models::{
     category::Category,

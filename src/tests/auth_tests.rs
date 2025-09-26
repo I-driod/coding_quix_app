@@ -4,7 +4,7 @@ mod tests {
         body::to_bytes,
         http::{self, Request, StatusCode},
     };
-    use serde_json::{json, Value};
+    use serde_json::{json, };
     use tower::ServiceExt;
 
     use crate::{models::user::Role, services::user_service::LoginResponse};

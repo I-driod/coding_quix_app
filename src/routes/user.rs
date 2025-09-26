@@ -1,5 +1,5 @@
 use axum::{extract::{Path, State}, http::StatusCode, middleware, Json, Router};
-use bson::oid::ObjectId;
+use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
 use utoipa::ToSchema;
 use crate::models::user::{Profile, UserResponse};

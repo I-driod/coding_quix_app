@@ -4,7 +4,7 @@ mod tests {
         body::to_bytes,
         http::{Request, StatusCode},
     };
-    use bson::oid::ObjectId;
+    use mongodb::bson::oid::ObjectId;
     use tower::ServiceExt;
     use std::fs;
 
@@ -13,6 +13,7 @@ mod tests {
             category::{Category, CreateCategoryResponse},
             question::{Difficulty, Question, QuestionType},
             user::{Role, UserResponse},
+            category::CategoryResponse,
         },
         tests::common::{create_test_user, setup},
     };
@@ -82,14 +83,23 @@ mod tests {
         let response = ctx.app.clone().oneshot(request).await.unwrap();
 
         // Assert
-        // assert_eq!(response.status(), StatusCode::OK);
-        // let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        // let categories: Vec<CategoryWithTopUserResponse> = serde_json::from_slice(&body).unwrap();
-        // assert_eq!(categories.len(), 1);
-        // let cat_response = &categories[0];
-        // assert_eq!(cat_response.category.name, "Test Category");
-        // assert!(cat_response.top_user.is_some());
-        // assert_eq!(cat_response.top_user.as_ref().unwrap().username, "topgun");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        #[derive(serde::Deserialize, Debug)]
+        struct CategoryWithTopUserResponse {
+            category: CategoryResponse,
+            top_user: Option<UserResponse>,
+        }
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let categories: Vec<CategoryWithTopUserResponse> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(categories.len(), 1);
+        let cat_response = &categories[0];
+        assert_eq!(cat_response.category.name, "Test Category");
+        // The top_user_id in the Category model is updated by the quiz service,
+        // but the CategoryResponse itself doesn't directly contain the UserResponse.
+        assert!(cat_response.top_user.is_some());
+        assert_eq!(cat_response.top_user.as_ref().unwrap().username, "topgun");
 
         // Act: Test /admin/categories/{id}/top_user
         let top_user_url = format!("/admin/categories/{}/top_user", category_id.to_hex());
@@ -153,17 +163,12 @@ mod tests {
 
         assert_eq!(status, StatusCode::CREATED);
 
-        let create_category_response: CreateCategoryResponse = serde_json::from_slice(&body).unwrap();
+        let create_category_response: crate::models::category::CreateCategoryResponse = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(create_category_response.message, "Category created successfully");
         assert_eq!(create_category_response.category.name, category_name);
         assert_eq!(create_category_response.category.tags, tags);
         assert!(create_category_response.category.image_url.is_some());
-
-        // Clean up the uploaded file.
-        let uploaded_filename = create_category_response.category.image_url.unwrap().split('/').last().unwrap().to_string();
-        let filepath = format!("uploads/{}", uploaded_filename);
-        fs::remove_file(&filepath).unwrap();
     }
 
     #[tokio::test]
@@ -206,7 +211,7 @@ mod tests {
             .unwrap();
 
         // Act
-        ctx.app.clone().oneshot(request).await.unwrap();
+        let response = ctx.app.clone().oneshot(request).await.unwrap();
 
         // Assert
         assert_eq!(response.status(), StatusCode::CREATED);

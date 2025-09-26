@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State}, http::StatusCode, Extension, Json, Router
 };
-use bson::oid::ObjectId;
+use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -50,7 +50,7 @@ pub async fn get_leaderboard(
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid category ID".to_string()))?;
 
     let leaderboard = quiz_service.leaderboard_service
-        .get_leaderboard(category_id)
+        .get_leaderboard(category_id.clone())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 

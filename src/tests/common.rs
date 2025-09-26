@@ -1,13 +1,14 @@
 use axum::{
     body::Body,
-    http::{self, Request, StatusCode},
     Router,
 };
-use bson::oid::ObjectId;
+use mongodb::bson::oid::ObjectId;
 use mongodb::Database;
-use serde_json::{json, Value};
+use serde_json::{ Value};
 use std::sync::Arc;
-use tower::ServiceExt;
+use mongodb::bson::Document;
+use mongodb::bson::doc;
+
 
 use crate::{
     config::Config,
@@ -16,7 +17,7 @@ use crate::{
     routes,
     services::{
         phone_verify::TwilioClient, question_service::QuestionService, quiz_service::QuizService,
-        user_service::UserService,
+        user_service::UserService, s3_service::S3Service
     },
     utils::{generate_jwt, hash_password},
 };
@@ -25,6 +26,7 @@ pub struct TestServices {
     pub user_service: UserService,
     pub quiz_service: QuizService,
     pub question_service: QuestionService,
+    pub s3_service: S3Service,
 }
 pub struct TestContext {
     pub app: Router,
@@ -54,7 +56,8 @@ pub async fn setup() -> TestContext {
 
     // Clean up database and verify
     for collection in ["users", "quizzes", "categories", "questions"] {
-        let result = db.collection::<bson::Document>(collection).drop().await;
+      let result = db.collection::<Document>(collection).drop().await;
+ 
         println!("Drop {} result: {:?}", collection, result);
         if let Err(e) = result {
             panic!("Failed to drop collection {}: {}", collection, e);
@@ -67,13 +70,14 @@ pub async fn setup() -> TestContext {
     let user_service = UserService::new(db.clone(), twilio_client.clone());
     let quiz_service = QuizService::new(db.clone(), Arc::new(crate::services::leaderboard_service::LeaderboardService::new(db.clone())));
     let question_service = QuestionService::new(db.clone());
+    let s3_service = S3Service::new(aws_sdk_s3::Client::new(&aws_config::load_from_env().await), "test-bucket".to_string());
 
-    let app = routes::init_routes(db.clone(), config_arc);
+    let app = routes::init_routes(db.clone(), config_arc, Arc::new(s3_service));
 
     TestContext {
         app,
         db,
-        services: TestServices { user_service, quiz_service, question_service },
+        services: TestServices { user_service, quiz_service, question_service, s3_service: S3Service::new(aws_sdk_s3::Client::new(&aws_config::load_from_env().await), "test-bucket".to_string()) },
     }
 }
 /// Creates a user in the database and returns the user's ID and a valid JWT.

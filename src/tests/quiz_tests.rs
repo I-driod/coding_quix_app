@@ -4,8 +4,7 @@ mod tests {
         body,
         http::{self, Request, StatusCode},
     };
-    use bson::oid::ObjectId;
-    use serde_json::json;
+    use mongodb::bson::oid::ObjectId;
     use tower::ServiceExt;
 
     use crate::models::{
@@ -14,7 +13,7 @@ mod tests {
         user::Role,
     };
 
-    use super::super::common::{create_test_user, json_body, setup};
+    use super::super::common::{create_test_user, setup};
 
     #[tokio::test]
     async fn test_finish_quiz_endpoint() {

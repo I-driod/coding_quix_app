@@ -1,8 +1,12 @@
+use aws_config::{BehaviorVersion, Region};
 use axum::Router;
 use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use utoipa::{openapi::{security::{HttpAuthScheme, HttpBuilder, SecurityScheme}, SecurityRequirement}, Modify, OpenApi};
 use utoipa_swagger_ui::SwaggerUi;
+use shuttle_aws_rds;
+
+use crate::{config::Config, routes::init_routes, services::phone_verify::TwilioClient};
 
 mod config;
 mod db;
@@ -107,28 +111,67 @@ impl Modify for SecurityAddon {
     }
 }
 
-#[tokio::main]
-async fn main() {
+#[shuttle_runtime::main]
+async fn main(
+    #[shuttle_runtime::Secrets] secrets: shuttle_runtime::SecretStore,
+) -> shuttle_axum::ShuttleAxum {
     dotenv::dotenv().ok();
 
-    let config = config::Config::from_env();
+    let access_key_id = secrets
+        .get("AWS_ACCESS_KEY_ID")
+        .expect("Missing AWS_ACCESS_KEY_ID in Secrets.toml");
+    let secret_access_key = secrets
+        .get("AWS_SECRET_ACCESS_KEY")
+        .expect("Missing AWS_SECRET_ACCESS_KEY in Secrets.toml");
+
+
+let creds = aws_credential_types::Credentials::new(
+    access_key_id,
+    secret_access_key,
+    None,                 // session token
+    None,                 // expiry
+    "loaded-from-secrets" // provider name
+);
+   let cfg = aws_config::defaults(BehaviorVersion::latest())
+    .region(Region::new("eu-north-1"))
+    .credentials_provider(creds)
+    .load()
+    .await;
+
+
+    
+
+let bucket_name = secrets
+    .get("AWS_BUCKET_NAME")
+    .expect("Missing AWS_BUCKET_NAME in Secrets.toml")
+    .to_string();
+
+
+
+    let s3_client = aws_sdk_s3::Client::new(&cfg);
+
+    // Then wrap or pass s3_client in your state
+let s3_service = Arc::new(services::s3_service::S3Service::new(
+    s3_client,
+    bucket_name.clone(),
+));
+
+    // let config = config::Config::from_env();
+
+    let config = Config::from_secrets(&secrets);
     let db = Arc::new(db::init_db(&config.mongodb_uri).await);
 
+      let twilio = Arc::new(TwilioClient::new_from_secrets(&secrets));
+
     let app = Router::new()
-       .merge(routes::init_routes(db.clone(), Arc::new(config.clone())))
+          .merge(init_routes(db, Arc::new(config), s3_service, twilio))
         .merge(
             SwaggerUi::new("/swagger-ui")
                 .url("/api-docs/openapi.json", ApiDoc::openapi()),
         )
         .layer(CorsLayer::permissive());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    println!("🚀 Server running at http://{}", addr); // helpful log
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-
-    // serve the router with the listener (axum::serve requires tokio + http1/http2 features)
-    axum::serve(listener, app).await.unwrap();
-     
+    Ok(app.into())
 }
 
 #[cfg(test)]
