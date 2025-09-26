@@ -1,14 +1,13 @@
 use bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use base64;
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
+
+
 
 use super::user::UserResponse;
 
 /// DB model (keep as-is, used for MongoDB)
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug,)]
 pub struct Category {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
@@ -58,7 +57,7 @@ pub struct CreateCategoryResponse {
 }
 
 impl From<(Category, Option<String>)> for CategoryResponse {
-    fn from((c, image_url): (Category, Option<String>)) -> Self {
+    fn from((c, _image_url): (Category, Option<String>)) -> Self {
         CategoryResponse {
             id: c.id.map(|oid| oid.to_hex()),
             name: c.name, 
@@ -96,9 +95,9 @@ impl From<CreateCategoryRequest> for Category {
 
 #[derive(ToSchema)]
 pub struct CreateCategoryMultipart {
-    pub name: String,
-    pub tags: Vec<String>,
-    pub parent_id: Option<String>,
+    pub _name: String,
+    pub _tags: Vec<String>,
+    pub _parent_id: Option<String>,
     #[schema(value_type = String, format = "binary")]
-    pub image: Option<Vec<u8>>,
+    pub _image: Option<Vec<u8>>,
 }

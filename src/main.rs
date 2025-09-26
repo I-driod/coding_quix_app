@@ -34,12 +34,18 @@ mod middleware;
         routes::admin::get_categories_with_top_users,
         routes::quiz::submit_answer,
         routes::quiz::finish_quiz,
-        routes::quiz::get_leaderboard
+        routes::quiz::get_leaderboard,
+        routes::quiz::pause_quiz,
+        routes::admin::get_category,
+        routes::admin::list_categories,
+        routes::admin::delete_category,
+        routes::admin::get_question,
+        routes::admin::list_questions,
+        routes::admin::delete_question
 
     ),
     components(
         schemas(
-            routes::auth::RegisterRequest,
             routes::auth::ConfirmRegisterRequest,
             routes::auth::StartVerificationRequest,
             routes::auth::LoginRequest,
@@ -54,7 +60,10 @@ mod middleware;
             models::category::CategoryWithTopUserResponse,
             models::question::CreateQuestionRequest,
             routes::quiz::SubmitAnswerRequest,
+            routes::quiz::PauseQuizRequest,
             models::leaderboard::LeaderboardEntry,
+            models::category::CategoryResponse,
+            models::question::QuestionResponse,
 
             // routes::quiz::FiFn,
             

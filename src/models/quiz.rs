@@ -54,12 +54,7 @@ mod duration_as_secs {
 }
 
 
-#[derive(Deserialize, ToSchema)]
-pub struct StartQuizRequest {
-    pub category_id: String,   // hex string from ObjectId
-    pub difficulty: Difficulty,
-    pub num_questions: i32,
-}
+
 
 
 #[derive(Serialize, ToSchema)]

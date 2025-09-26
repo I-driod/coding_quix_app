@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use futures::stream::TryStreamExt;
-use mongodb::{Collection, Database, bson::{doc, oid::ObjectId}, options::FindOptions};
+use mongodb::{Collection, Database, bson::{doc, oid::ObjectId},};
 use crate::models::leaderboard::LeaderboardEntry;
-use crate::services::user_service::UserService;
+
 pub struct LeaderboardService {
     collection: Collection<LeaderboardEntry>,
 }

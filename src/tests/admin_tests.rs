@@ -4,14 +4,13 @@ mod tests {
         body::to_bytes,
         http::{Request, StatusCode},
     };
-    use serde::Deserialize;
     use bson::oid::ObjectId;
     use tower::ServiceExt;
     use std::fs;
 
     use crate::{
         models::{
-            category::{Category, CategoryResponse, CreateCategoryMultipart, CreateCategoryResponse, CategoryWithTopUserResponse},
+            category::{Category, CreateCategoryResponse, CategoryWithTopUserResponse},
             question::{Difficulty, Question, QuestionType},
             user::{Role, UserResponse},
         },
@@ -85,7 +84,7 @@ mod tests {
         // Assert
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let categories: Vec<crate::models::category::CategoryWithTopUserResponse> = serde_json::from_slice(&body).unwrap();
+        let categories: Vec<CategoryWithTopUserResponse> = serde_json::from_slice(&body).unwrap();
         assert_eq!(categories.len(), 1);
         let cat_response = &categories[0];
         assert_eq!(cat_response.category.name, "Test Category");
@@ -122,15 +121,7 @@ mod tests {
 
         let boundary = "--------------------------boundary";
         let body_str = format!(
-            "--{}
-\nContent-Disposition: form-data; name=\"name\"
-\n\r\n{}
-\n--{}
-\nContent-Disposition: form-data; name=\"tags\"
-\n\r\n{}
-\n--{}
-\nContent-Disposition: form-data; name=\"image\"; filename=\"{}\"\r\nContent-Type: image/png\r\n\r\n{}
-\n--{}--\r\n",
+            "--{}\nContent-Disposition: form-data; name=\"name\"\n\r\n{}\n--{}\nContent-Disposition: form-data; name=\"tags\"\n\r\n{}\n--{}\nContent-Disposition: form-data; name=\"image\"; filename=\"{}\"\r\nContent-Type: image/png\r\n\r\n{}\n--{}--\r\n",
             boundary,
             category_name,
             boundary,
@@ -140,6 +131,8 @@ mod tests {
             std::str::from_utf8(image_bytes).unwrap(),
             boundary
         );
+
+        println!("Request body: {}", body_str);
 
         let request = Request::builder()
             .method("POST")
@@ -152,10 +145,15 @@ mod tests {
 
         let response = ctx.app.clone().oneshot(request).await.unwrap();
 
-        assert_eq!(response.status(), StatusCode::CREATED);
-
+        let status = response.status();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let create_category_response: crate::models::category::CreateCategoryResponse = serde_json::from_slice(&body).unwrap();
+
+        println!("Response status: {}", status);
+        println!("Response body: {:?}", String::from_utf8_lossy(&body));
+
+        assert_eq!(status, StatusCode::CREATED);
+
+        let create_category_response: CreateCategoryResponse = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(create_category_response.message, "Category created successfully");
         assert_eq!(create_category_response.category.name, category_name);

@@ -6,7 +6,7 @@ use futures::TryStreamExt;
 use mongodb::{Collection, Database};
 use uuid::Uuid;
 
-use crate::{models::{category::{self, Category, CategoryResponse, CategoryWithTopUserResponse}, question::{Difficulty, Question}, quiz::Quiz, user::UserResponse}, services::{leaderboard_service::LeaderboardService, user_service::UserService}};
+use crate::{models::{category::{self, Category,  CategoryWithTopUserResponse}, question::{Difficulty, Question}, quiz::Quiz, user::UserResponse}, services::{leaderboard_service::LeaderboardService, user_service::UserService}};
 
 
 
@@ -173,6 +173,15 @@ impl QuizService {
         ).await.map_err(|_| "Failed to update quiz".to_string())?;
 
         Ok(quiz)
+    }
+
+    pub async fn pause_quiz(&self, quiz_id: ObjectId, paused: bool) -> Result<Quiz, String> {
+        let update = doc! { "$set": { "paused": paused } };
+        self.quiz_collection
+            .find_one_and_update(doc! { "_id": quiz_id }, update, )
+            .await
+            .map_err(|_| "Failed to update quiz".to_string())?
+            .ok_or("Quiz not found".to_string())
     }
 
    pub async fn finish_quiz(    

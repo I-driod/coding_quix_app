@@ -12,38 +12,15 @@ pub struct StartVerificationRequest {
     phone_number: String, // E.164 recommended
 }
 
-
-
-
-#[derive(Deserialize, ToSchema)]
-pub struct RegisterRequest {
-    phone_number: i32,
-    username: String,
-    password: String,
-    role: Option<String>,  // "user" or "admin", default user
-}
-
 #[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
     phone_number: String,
     password: String,
 }
 
-// #[utoipa::path(
-//     post,
-//     path = "/register",
-//     request_body = RegisterRequest,
-//     responses(
-//         (status = 201, description = "User registered")
-//     )
-// )]
-// pub async fn register(State((user_service, config)): State<(Arc<UserService>, Arc<config::Config>)>, Json(req): Json<RegisterRequest>) -> Result<StatusCode, (StatusCode, String)> {
-//     let role = match req.role.as_deref() {
-//         Some("admin") => Role::Admin,
-//         _ => Role::User,
-//     };
-//     user_service.register(req.phone_number, req.username, req.password, role).await.map(|_| StatusCode::CREATED).map_err(|e| (StatusCode::BAD_REQUEST, e))
-// }
+
+
+
 
 #[utoipa::path(
     post,
