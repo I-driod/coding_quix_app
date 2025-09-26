@@ -51,7 +51,7 @@ pub struct CategoryWithTopUserResponse {
 }
 
 /// Response wrapper for create category
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Deserialize)]
 pub struct CreateCategoryResponse {
     pub message: String,
     pub category: CategoryResponse,

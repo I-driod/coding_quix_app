@@ -148,7 +148,7 @@ pub fn quiz_routes(quiz_service: Arc<QuizService>, user_service: Arc<UserService
         .route("/quiz/start", axum::routing::post(start_quiz))
         .route("/quiz/{id}/answer", axum::routing::post(submit_answer))
         .route("/quiz/{id}/finish", axum::routing::post(finish_quiz))
-        .route("/quiz/leaderboard/:category_id", axum::routing::get(get_leaderboard))
+        .route("/quiz/leaderboard/{category_id}", axum::routing::get(get_leaderboard))
 
     .layer(axum::middleware::from_fn(auth_middleware))
         .with_state((quiz_service, user_service))

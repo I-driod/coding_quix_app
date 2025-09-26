@@ -68,11 +68,88 @@ pub async fn get_categories_with_top_users(
         ("bearer_auth" = [])
     )
 )]
-#[axum::debug_handler]pub async fn create_category(
+// #[axum::debug_handler]pub async fn create_category(
+//     State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
+//     headers: HeaderMap,
+//     mut multipart: Multipart,
+// ) -> Result<Json<CreateCategoryResponse>, (StatusCode, String)> {
+//     let mut name = None;
+//     let mut tags = Vec::new();
+//     let mut parent_id = None;
+//     let mut image_url = None;
+
+//     let base_url = match std::env::var("BASE_URL") {
+//         Ok(val) => val,
+//         Err(_) => {
+//             let host = headers
+//                 .get("host")
+//                 .and_then(|h| h.to_str().ok())
+//                 .unwrap_or("localhost:3000"); // Fallback
+//             let scheme = if host.starts_with("localhost") { "http" } else { "https" };
+//             format!("{}://{}", scheme, host)
+//         }
+//     };
+
+//     while let Some(field) = multipart.next_field().await.unwrap() {
+//         let field_name = field.name().unwrap().to_string();
+//         match field_name.as_str() {
+//             "name" => name = Some(field.text().await.unwrap()),
+//             "tags" => tags = field.text().await.unwrap().split(',').map(|s| s.trim().to_string()).collect(),
+//             "parent_id" => parent_id = Some(field.text().await.unwrap()),
+//             "image" => {
+//                 let bytes = field.bytes().await.unwrap().to_vec();
+//                 // Save image to disk
+//                 let filename = format!("{}.png", Uuid::new_v4());
+//                 let upload_dir = "uploads";
+//                 let filepath = format!("{}/{}", upload_dir, filename);
+//                 fs::create_dir_all(upload_dir).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create upload dir: {}", e)))?;
+//                 fs::write(&filepath, &bytes).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save image: {}", e)))?;
+//                 image_url = Some(format!("{}/uploads/{}", base_url, filename));
+//             },
+//             _ => {}
+//         }
+//     }
+
+//     // Convert parent_id to ObjectId if present
+//     let parent_oid = match parent_id {
+//         Some(ref s) if !s.is_empty() => Some(ObjectId::parse_str(s).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid parent_id".to_string()))?),
+//         _ => None,
+//     };
+
+//     let category = Category {
+//         id: None,
+//         name: name.ok_or((StatusCode::BAD_REQUEST, "Missing name".to_string()))?,
+//         tags,
+//         parent_id: parent_oid,
+//         image_url: image_url.clone(), 
+//         top_user_id: None,
+//     };
+
+//     question_service
+//         .create_category(category.clone())
+//         .await
+//         .map(|saved_category_id: String| {
+//             Json(CreateCategoryResponse {
+//                 message: "Category created successfully".to_string(),
+//                 category: CategoryResponse {
+//                     id: Some(saved_category_id),
+//                     name: category.name,
+//                     tags: category.tags,
+//                     parent_id: category.parent_id.map(|oid| oid.to_hex()),
+//                     image_url,
+//                 },
+//             })
+//         })
+//         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
+// }
+
+
+#[axum::debug_handler]
+pub async fn create_category(
     State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>,
     headers: HeaderMap,
     mut multipart: Multipart,
-) -> Result<Json<CreateCategoryResponse>, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<CreateCategoryResponse>), (StatusCode, String)> {
     let mut name = None;
     let mut tags = Vec::new();
     let mut parent_id = None;
@@ -90,14 +167,17 @@ pub async fn get_categories_with_top_users(
         }
     };
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))? {
         let field_name = field.name().unwrap().to_string();
         match field_name.as_str() {
-            "name" => name = Some(field.text().await.unwrap()),
-            "tags" => tags = field.text().await.unwrap().split(',').map(|s| s.trim().to_string()).collect(),
-            "parent_id" => parent_id = Some(field.text().await.unwrap()),
+            "name" => name = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?),
+            "tags" => {
+                let tags_str = field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?;
+                tags = tags_str.split(',').map(|s| s.trim().to_string()).collect();
+            },
+            "parent_id" => parent_id = Some(field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?),
             "image" => {
-                let bytes = field.bytes().await.unwrap().to_vec();
+                let bytes = field.bytes().await.map_err(|e| (StatusCode::BAD_REQUEST, format!("Field error: {}", e)))?.to_vec();
                 // Save image to disk
                 let filename = format!("{}.png", Uuid::new_v4());
                 let upload_dir = "uploads";
@@ -129,7 +209,7 @@ pub async fn get_categories_with_top_users(
         .create_category(category.clone())
         .await
         .map(|saved_category_id: String| {
-            Json(CreateCategoryResponse {
+            (StatusCode::CREATED, Json(CreateCategoryResponse {
                 message: "Category created successfully".to_string(),
                 category: CategoryResponse {
                     id: Some(saved_category_id),
@@ -138,11 +218,10 @@ pub async fn get_categories_with_top_users(
                     parent_id: category.parent_id.map(|oid| oid.to_hex()),
                     image_url,
                 },
-            })
+            }))
         })
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
 }
-
 #[utoipa::path(
     post,
     path = "/admin/questions",
@@ -155,9 +234,9 @@ pub async fn get_categories_with_top_users(
 pub async fn create_question(
     State((_quiz_service, _user_service, question_service)): State<(Arc<QuizService>, Arc<UserService>, Arc<QuestionService>)>, 
     Json(question): Json<Question>
-) -> Result<Json<CreateQuestionResponse>, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<CreateQuestionResponse>), (StatusCode, String)> {
     question_service.create_question(question.clone()).await.map(|_| {
-        Json(CreateQuestionResponse {
+        (StatusCode::CREATED, Json(CreateQuestionResponse {
             message: "Question created successfully".to_string(),
             question: QuestionResponse {
                 id: question.id.map(|oid| oid.to_hex()),
@@ -171,7 +250,7 @@ pub async fn create_question(
                 timer_secs: question.timer.num_seconds(),
                 tags: question.tags,
             }
-        })
+        }))
     })
     .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }

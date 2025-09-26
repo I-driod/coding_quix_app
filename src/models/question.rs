@@ -52,7 +52,7 @@ pub struct CreateQuestionRequest {
 }
 
 /// Response DTO (server → client)
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, Deserialize)]
 pub struct QuestionResponse {
     pub id: Option<String>,
     pub category_id: String,
@@ -105,7 +105,7 @@ impl TryFrom<CreateQuestionRequest> for Question {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateQuestionResponse {
     pub message: String,
     pub question: QuestionResponse,
